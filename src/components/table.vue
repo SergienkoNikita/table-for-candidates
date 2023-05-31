@@ -1,5 +1,6 @@
 <template>
   <div class="table">
+    <p class="table-desc">{{previewMessage}}</p>
     <div
         v-for="row in rowsData"
         :key="row.id"
@@ -7,21 +8,21 @@
     >
       <div v-for="col in row.cols" :key="col.id" class="table-col">
         <input
-          v-model.number="col.value"
-          @input="(e) => {e.target.value = e.target.value.replace(/\D/g, '')}"
+            v-model.number="col.value"
+            @input="(e) => {e.target.value = e.target.value.replace(/\D/g, '')}"
         />
       </div>
-      <div class="table-col table-col-result">{{rowsResult[row.id] as string}} ₽</div>
+      <div class="table-col table-col-result">{{ rowResults?.[row.id] ?? 0 }} ₽</div>
     </div>
 
     <div v-if="rowsData.at(0)" class="table-row">
-      <div v-for="col in rowsData.at(0).cols" class="table-col table-col-result">{{colsResult[col.id]}} ₽</div>
+      <div v-for="col in rowsData.at(0).cols" class="table-col table-col-result">{{ colsResult[col.id] }} ₽</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, onBeforeMount, ref} from "vue";
+import {computed, onBeforeMount, ref, watch} from "vue";
 
 type Col = {
   id: number;
@@ -40,6 +41,8 @@ const props = defineProps<{
 }>();
 
 const rowsData = ref<Row[]>([])
+
+const rowResults = ref<Record<Row["id"], number>>({});
 
 const rowsResult = computed<Record<Row["id"], number>>(() => {
   const results = {};
@@ -67,6 +70,54 @@ const colsResult = computed<Record<Col['id'], number>>(() => {
   return results;
 })
 
+const previewMessage = ref<string>('')
+
+const animate = ({timing, draw, duration}) => {
+  let start = performance.now();
+
+  requestAnimationFrame(function a(time) {
+    let timeFr = (time - start) / duration;
+    if (timeFr > 1) timeFr = 1;
+
+    let progress = timing(timeFr);
+
+    draw(progress)
+
+    if (timeFr < 1) {
+      requestAnimationFrame(a)
+    }
+  })
+}
+
+watch(
+    () => rowsResult.value,
+    (value, oldValue) => {
+      const changedValueKeys = []
+      for (const key in value) {
+        if (value[key] !== oldValue[key] && oldValue[key] != undefined) changedValueKeys.push(key)
+      }
+
+      changedValueKeys.forEach((k) => {
+        const old = oldValue[k];
+        const newV = value[k];
+
+        const diff = newV - old;
+
+        animate({
+          duration: 800,
+          timing: (fr) => {
+              return 1 - Math.pow(1 - fr, 2);
+          },
+          draw(progress) {
+            if (progress < 0) return;
+            const addedV = Math.floor(diff * progress);
+
+            if (addedV) rowResults.value[k] = old + addedV
+          }
+        })
+      })
+    }, { deep: true, flush: "post" })
+
 const getUniqId = (): number => {
   const randNum = Math.floor(Math.random() * 1000)
 
@@ -79,7 +130,7 @@ const generateRow = (): Row => {
   const id = getUniqId();
   const cols: Col[] = [];
   for (let i = 1; i <= props.cols; i += 1) {
-    cols.push({id: i ,value: ''})
+    cols.push({id: i, value: ''})
   }
 
   return {id, cols}
@@ -91,13 +142,40 @@ const generateInitialData = (): void => {
   }
 }
 
+const animateText = () => {
+  let text = 'Привет, здесь я пытался сделать анимацию печати текста. По-моему, получилось неплохо! Как думаешь? Напиши коммент к репозиторию! :)';
+  let to = text.length,
+      from = 0;
+
+  animate({
+    duration: 7000,
+    timing: (tf) => tf,
+    draw: function(progress) {
+      let result = (to - from) * progress + from;
+      const resultText = text.slice(0, Math.ceil(result))
+
+      previewMessage.value = progress < 1 ? resultText + '|' : resultText;
+    }
+  });
+}
+
 
 onBeforeMount(() => {
   generateInitialData();
+
+  animateText();
 });
 </script>
 
 <style scoped>
+.table-desc {
+  height: 150px;
+  width: 800px;
+  text-align: left;
+  margin: 0 auto;
+  font-size: 30px;
+}
+
 .table {
   display: flex;
   flex-direction: column;
@@ -108,11 +186,11 @@ onBeforeMount(() => {
   justify-content: center;
   align-items: center;
   flex-direction: row;
-  border-bottom:1px solid green;
+  border-bottom: 1px solid green;
 }
 
 .table-row:first-of-type {
-  border-top:1px solid green;
+  border-top: 1px solid green;
 }
 
 .table-row:last-of-type {
