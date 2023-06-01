@@ -32,7 +32,7 @@ type Col = {
 
 type Row = {
   id: number;
-  cols: Col[]
+  cols: Col[];
 }
 
 const props = defineProps<{
